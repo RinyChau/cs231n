@@ -74,7 +74,11 @@ class TwoLayerNet(object):
     # Store the result in the scores variable, which should be an array of      #
     # shape (N, C).                                                             #
     #############################################################################
-    pass
+    hidden_output = X.dot(W1) + b1
+    hidden_output = np.maximum(0, hidden_output)
+    scores = hidden_output.dot(W2) + b2
+    # norm_scores = np.exp(unnorm_scores)
+    # scores = norm_scores / np.sum(norm_scores,axis=1)[:,np.newaxis]
     #############################################################################
     #                              END OF YOUR CODE                             #
     #############################################################################
@@ -92,7 +96,11 @@ class TwoLayerNet(object):
     # classifier loss. So that your results match ours, multiply the            #
     # regularization loss by 0.5                                                #
     #############################################################################
-    pass
+    norm_scores = np.exp(scores)
+    probs = norm_scores / np.sum(norm_scores,axis=1)[:,np.newaxis]
+    data_loss = np.sum(-np.log(probs[range(N),y])) / N
+    reg_loss = 0.5 *reg* (np.sum(W1**2) + np.sum(W2**2))
+    loss = data_loss + reg_loss
     #############################################################################
     #                              END OF YOUR CODE                             #
     #############################################################################
@@ -104,7 +112,26 @@ class TwoLayerNet(object):
     # and biases. Store the results in the grads dictionary. For example,       #
     # grads['W1'] should store the gradient on W1, and be a matrix of same size #
     #############################################################################
-    pass
+    dscores = probs
+    dscores[range(N),y] -= 1
+    dW2 = hidden_output.T.dot(dscores) / N
+    dW2 += reg * W2
+    grads["W2"] = dW2
+    dB2 = np.mean(dscores, axis=0)
+    grads["b2"] = dB2
+
+    #dW1 = np.zeros_like(W1.shape)
+    #dW1 = np.sum(X)
+
+    d_hidden_layer = W2.dot(dscores)
+    dW2_back = np.sum(dW2, axis=1)
+    X_back = np.sum(X, axis=0)
+    dW1 = X_back[:,np.newaxis].dot(dW2_back[np.newaxis,:])
+    grads["W1"] = dW1
+
+
+
+
     #############################################################################
     #                              END OF YOUR CODE                             #
     #############################################################################
