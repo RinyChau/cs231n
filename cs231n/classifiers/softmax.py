@@ -29,8 +29,25 @@ def softmax_loss_naive(W, X, y, reg):
   # here, it is easy to run into numeric instability. Don't forget the        #
   # regularization!                                                           #
   #############################################################################
-  scores = X.dot(W)
+  num_train = X.shape[0]
+  num_classes = W.shape[1]
+  for i in xrange(num_train):
+      norm_scores = np.exp(X[i].dot(W))
+      scores_sum = np.sum(norm_scores)
+      probs = norm_scores / scores_sum
+      for j in xrange(num_classes):
+          prob = probs[j]
+          if j == y[i]:
+              dW[:,j] += (prob - 1) * X[i]
+          else:
+              dW[:,j] += prob * X[i]
+      correct_prob = probs[y[i]]
+      loss += -np.log(correct_prob)
 
+  loss /= num_train
+  dW /= num_train
+  dW += reg * W
+  loss += 0.5 * reg * np.sum(W**2)
   #############################################################################
   #                          END OF YOUR CODE                                 #
   #############################################################################
@@ -47,14 +64,27 @@ def softmax_loss_vectorized(W, X, y, reg):
   # Initialize the loss and gradient to zero.
   loss = 0.0
   dW = np.zeros_like(W)
-
+  num_train = X.shape[0]
   #############################################################################
   # TODO: Compute the softmax loss and its gradient using no explicit loops.  #
   # Store the loss in loss and the gradient in dW. If you are not careful     #
   # here, it is easy to run into numeric instability. Don't forget the        #
   # regularization!                                                           #
-  #############################################################################
-  pass
+  ############################################################################
+  scores =X.dot(W)
+  scores = np.minimum(scores,500)
+  scores_norm = np.exp(scores)
+  scores_sum = np.sum(scores_norm,axis=1)
+  probs = scores_norm / scores_sum[:,np.newaxis]
+  loss += -np.sum(np.log(probs[range(num_train),y]))
+  loss /= num_train
+  loss += 0.5 * reg * np.sum(W**2)
+
+  grad_prob = np.copy(probs)
+  grad_prob[range(num_train),y] += -1
+  dW = X.T.dot(grad_prob)
+  dW /= num_train
+  dW += reg * W
   #############################################################################
   #                          END OF YOUR CODE                                 #
   #############################################################################
