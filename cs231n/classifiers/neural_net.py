@@ -96,9 +96,11 @@ class TwoLayerNet(object):
     # classifier loss. So that your results match ours, multiply the            #
     # regularization loss by 0.5                                                #
     #############################################################################
-    norm_scores = np.minimum(scores, 100)
-    probs = (norm_scores / np.sum(norm_scores,axis=1)[:,np.newaxis]) + 1e-8
-    data_loss = np.sum(-np.log(probs[range(N),y])) / N
+    norm_scores = np.exp(np.minimum(scores,300))
+    #norm_scores = np.exp(scores,300)
+    probs = (norm_scores / np.sum(norm_scores,axis=1)[:,np.newaxis])
+    each_data_loss = -np.log(probs[range(N),y]+(1e-30))
+    data_loss = np.sum(each_data_loss) / N
     reg_loss = 0.5 *reg* (np.sum(W1**2) + np.sum(W2**2))
     loss = data_loss + reg_loss
     #############################################################################
