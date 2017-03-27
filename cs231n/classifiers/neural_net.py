@@ -126,7 +126,7 @@ class TwoLayerNet(object):
     d_hidden_layer[hidden_output <= 0] = 0
     dW1 = X.T.dot(d_hidden_layer) / N
     dW1 += reg * W1
-    dB1 = np.sum(d_hidden_layer, axis=0)
+    dB1 = np.mean(d_hidden_layer, axis=0)
     grads["W1"] = dW1
     grads["b1"] =dB1
 

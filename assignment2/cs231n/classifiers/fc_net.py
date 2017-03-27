@@ -45,8 +45,10 @@ class TwoLayerNet(object):
     # weights and biases using the keys 'W1' and 'b1' and second layer weights #
     # and biases using the keys 'W2' and 'b2'.                                 #
     ############################################################################
-    self.params["W1"] = np.random.normal(0, 1, 1000) * weight_scale
-    pass
+    self.params["W1"] = np.random.randn(input_dim, hidden_dim) * weight_scale
+    self.params["b1"] = np.zeros(hidden_dim)
+    self.params["W2"] = np.random.randn(hidden_dim, num_classes) * weight_scale
+    self.params["b2"] = np.zeros(num_classes)
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -76,7 +78,15 @@ class TwoLayerNet(object):
     # TODO: Implement the forward pass for the two-layer net, computing the    #
     # class scores for X and storing them in the scores variable.              #
     ############################################################################
-    pass
+    reg = self.reg
+    O_X = X
+    W1, b1 = self.params['W1'], self.params['b1']
+    W2, b2 = self.params['W2'], self.params['b2']
+    X = X.reshape(X.shape[0], -1)
+    N, D = X.shape
+    hidden = X.dot(W1) + b1
+    hidden = np.maximum(hidden, 0)
+    scores = hidden.dot(W2) + b2
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -96,7 +106,31 @@ class TwoLayerNet(object):
     # automated tests, make sure that your L2 regularization includes a factor #
     # of 0.5 to simplify the expression for the gradient.                      #
     ############################################################################
-    pass
+    norm_scores = np.exp(np.minimum(scores,300))
+    probs = (norm_scores / np.sum(norm_scores,axis=1)[:,np.newaxis])
+    each_data_loss = -np.log(probs[range(N),y]+(1e-30))
+    data_loss = np.sum(each_data_loss/N)
+    W1 = np.maximum(np.minimum(W1, 100000),-100000)
+    W2 = np.maximum(np.minimum(W2, 100000),-100000)
+    reg_loss = 0.5 *reg* (np.sum(np.minimum(W1,1000)**2) + np.sum(np.minimum(W2,1000)**2))
+    loss = data_loss + reg_loss
+    
+    
+    dscores = probs
+    dscores[range(N),y] -= 1
+    dW2 = hidden.T.dot(dscores/N)
+    dW2 += reg * W2
+    grads["W2"] = dW2
+    dB2 = np.mean(dscores, axis=0)
+    grads["b2"] = dB2
+
+    d_hidden_layer = dscores.dot(W2.T)
+    d_hidden_layer[hidden <= 0] = 0
+    dW1 = X.T.dot(d_hidden_layer) / N
+    dW1 += reg * W1
+    dB1 = np.mean(d_hidden_layer, axis=0)
+    grads["W1"] = dW1
+    grads["b1"] =dB1
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -162,7 +196,18 @@ class FullyConnectedNet(object):
     # beta2, etc. Scale parameters should be initialized to one and shift      #
     # parameters should be initialized to zero.                                #
     ############################################################################
-    pass
+    for i in range(self.num_layers):
+        idx = str(i+1)
+        w = "W" + idx
+        b = "b" + idx
+        scale = "gamma" + idx
+        shift = "beta" + idx
+        hidden_dim = hidden_dims[i] if i + 1 < self.num_layers else num_classes
+        previous_dim = input_dim if i ==0 else hidden_dims[i-1]
+        self.params[w] = np.random.randn(previous_dim, hidden_dim) * weight_scale
+        self.params[b] = np.zeros(hidden_dim,dtype=dtype)
+        self.params[scale] = np.ones((previous_dim, hidden_dim),dtype=dtype)
+        self.params[shift] = np.zeros((previous_dim, hidden_dim),dtype=dtype)
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -188,7 +233,6 @@ class FullyConnectedNet(object):
     # Cast all parameters to the correct datatype
     for k, v in self.params.iteritems():
       self.params[k] = v.astype(dtype)
-
 
   def loss(self, X, y=None):
     """
