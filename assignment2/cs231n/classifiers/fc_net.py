@@ -196,18 +196,14 @@ class FullyConnectedNet(object):
     # beta2, etc. Scale parameters should be initialized to one and shift      #
     # parameters should be initialized to zero.                                #
     ############################################################################
-    for i in range(self.num_layers):
-        idx = str(i+1)
-        w = "W" + idx
-        b = "b" + idx
-        scale = "gamma" + idx
-        shift = "beta" + idx
-        hidden_dim = hidden_dims[i] if i + 1 < self.num_layers else num_classes
-        previous_dim = input_dim if i ==0 else hidden_dims[i-1]
-        self.params[w] = np.random.randn(previous_dim, hidden_dim) * weight_scale
-        self.params[b] = np.zeros(hidden_dim,dtype=dtype)
-        self.params[scale] = np.ones((previous_dim, hidden_dim),dtype=dtype)
-        self.params[shift] = np.zeros((previous_dim, hidden_dim),dtype=dtype)
+    for i in xrange(self.num_layers):
+        idx = i+1
+        w = "W" + str(idx)
+        b= "b" + str(idx)
+        src_dim = input_dim if idx == 1 else hidden_dims[idx-2]
+        dst_dim = num_classes if idx == self.num_layers else hidden_dims[idx-1]
+        self.params[w] = np.random.randn(src_dim,dst_dim) * weight_scale
+        self.params[b] = np.zeros(dst_dim)
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -264,8 +260,18 @@ class FullyConnectedNet(object):
     # self.bn_params[1] to the forward pass for the second batch normalization #
     # layer, etc.                                                              #
     ############################################################################
-    pass
-    ############################################################################
+    layer = X.reshape(X.shape[0],-1)
+    layers = {1:layer}
+    for i in xrange(self.num_layers):
+        idx = i+1
+        w = "W" + str(idx)
+        b= "b" + str(idx)
+        layer = layer.dot(self.params[w]) + self.params[b] 
+        if idx != self.num_layers:
+            layer = np.maximum(layer,0)
+            layers[idx+1] = layer
+    scores = layer
+ ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
 
@@ -287,7 +293,30 @@ class FullyConnectedNet(object):
     # automated tests, make sure that your L2 regularization includes a factor #
     # of 0.5 to simplify the expression for the gradient.                      #
     ############################################################################
-    pass
+    N = X.shape[0]
+    norm_scores = np.exp(scores)
+    probs = norm_scores / np.sum(norm_scores, axis=1)[:,np.newaxis]
+    data_loss = np.sum(-np.log(probs[range(N),y]+1e-30)) / N
+    reg_loss = 0
+    for i in xrange(self.num_layers):
+        idx = i+1
+        w = "W" + str(idx)
+        reg_loss += np.sum(self.params[w]**2) * 0.5 * self.reg
+    loss = data_loss + reg_loss
+    
+    dscores = probs
+    dscores[range(N),y] -= 1
+    d_previous = dscores
+    for i in reversed(xrange(self.num_layers)):
+        idx = i+1
+        w = "W" + str(idx)
+        b = "b" + str(idx)
+        previous_input = layers[idx]
+        grads[w] = previous_input.T.dot(d_previous) / N
+        grads[w] += self.reg * self.params[w]
+        grads[b] = np.mean(d_previous, axis=0)
+        d_previous = d_previous.dot(self.params[w].T)
+        d_previous[layers[idx] <= 0] = 0
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
