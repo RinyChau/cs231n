@@ -79,14 +79,12 @@ class TwoLayerNet(object):
     # class scores for X and storing them in the scores variable.              #
     ############################################################################
     reg = self.reg
-    O_X = X
     W1, b1 = self.params['W1'], self.params['b1']
     W2, b2 = self.params['W2'], self.params['b2']
-    X = X.reshape(X.shape[0], -1)
-    N, D = X.shape
-    hidden = X.dot(W1) + b1
-    hidden = np.maximum(hidden, 0)
-    scores = hidden.dot(W2) + b2
+    N = X.shape[0]
+    hidden,affine_cache1 = affine_forward(X, W1, b1)
+    relu_hidden, relu_cache1 = relu_forward(hidden)
+    scores,affine_cache2 = affine_forward(relu_hidden, W2, b2)
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -106,29 +104,18 @@ class TwoLayerNet(object):
     # automated tests, make sure that your L2 regularization includes a factor #
     # of 0.5 to simplify the expression for the gradient.                      #
     ############################################################################
-    norm_scores = np.exp(np.minimum(scores,300))
-    probs = (norm_scores / np.sum(norm_scores,axis=1)[:,np.newaxis])
-    each_data_loss = -np.log(probs[range(N),y]+(1e-30))
-    data_loss = np.sum(each_data_loss/N)
-    W1 = np.maximum(np.minimum(W1, 100000),-100000)
-    W2 = np.maximum(np.minimum(W2, 100000),-100000)
+    data_loss, dscores = softmax_loss(scores, y)
     reg_loss = 0.5 *reg* (np.sum(np.minimum(W1,1000)**2) + np.sum(np.minimum(W2,1000)**2))
     loss = data_loss + reg_loss
-    
-    
-    dscores = probs
-    dscores[range(N),y] -= 1
-    dW2 = hidden.T.dot(dscores/N)
+
+    d_hidden_layer, dW2, dB2 = affine_backward(dscores, affine_cache2)
     dW2 += reg * W2
     grads["W2"] = dW2
-    dB2 = np.mean(dscores, axis=0)
     grads["b2"] = dB2
-
-    d_hidden_layer = dscores.dot(W2.T)
-    d_hidden_layer[hidden <= 0] = 0
-    dW1 = X.T.dot(d_hidden_layer) / N
+    
+    d_hidden_layer = relu_backward(d_hidden_layer, relu_hidden)
+    dx1, dW1, dB1 = affine_backward(d_hidden_layer, affine_cache1)
     dW1 += reg * W1
-    dB1 = np.mean(d_hidden_layer, axis=0)
     grads["W1"] = dW1
     grads["b1"] =dB1
     ############################################################################
@@ -261,15 +248,16 @@ class FullyConnectedNet(object):
     # layer, etc.                                                              #
     ############################################################################
     layer = X.reshape(X.shape[0],-1)
-    layers = {1:layer}
+    layers = {0:layer}
     for i in xrange(self.num_layers):
         idx = i+1
         w = "W" + str(idx)
         b= "b" + str(idx)
-        layer = layer.dot(self.params[w]) + self.params[b] 
+        layer, affine_cache = affine_forward(layer, self.params[w], self.params[b])
+        layers[idx] = {"layer":layer, "affine_cache": affine_cache}
         if idx != self.num_layers:
-            layer = np.maximum(layer,0)
-            layers[idx+1] = layer
+            layer, relu_cache = relu_forward(layer)
+            layers[idx]["relu_cache"] = relu_cache
     scores = layer
  ############################################################################
     #                             END OF YOUR CODE                             #
@@ -293,10 +281,8 @@ class FullyConnectedNet(object):
     # automated tests, make sure that your L2 regularization includes a factor #
     # of 0.5 to simplify the expression for the gradient.                      #
     ############################################################################
-    N = X.shape[0]
-    norm_scores = np.exp(scores)
-    probs = norm_scores / np.sum(norm_scores, axis=1)[:,np.newaxis]
-    data_loss = np.sum(-np.log(probs[range(N),y]+1e-30)) / N
+    
+    data_loss, dscores = softmax_loss(scores, y)
     reg_loss = 0
     for i in xrange(self.num_layers):
         idx = i+1
@@ -304,19 +290,16 @@ class FullyConnectedNet(object):
         reg_loss += np.sum(self.params[w]**2) * 0.5 * self.reg
     loss = data_loss + reg_loss
     
-    dscores = probs
-    dscores[range(N),y] -= 1
     d_previous = dscores
     for i in reversed(xrange(self.num_layers)):
         idx = i+1
         w = "W" + str(idx)
         b = "b" + str(idx)
-        previous_input = layers[idx]
-        grads[w] = previous_input.T.dot(d_previous) / N
+        layer = layers[idx]
+        if "relu_cache" in layer:
+            d_previous = relu_backward(d_previous, layer["relu_cache"])
+        d_previous, grads[w], grads[b] = affine_backward(d_previous, layer["affine_cache"])
         grads[w] += self.reg * self.params[w]
-        grads[b] = np.mean(d_previous, axis=0)
-        d_previous = d_previous.dot(self.params[w].T)
-        d_previous[layers[idx] <= 0] = 0
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
