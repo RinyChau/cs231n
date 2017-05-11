@@ -177,13 +177,13 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     x_mean = np.mean(x, axis=0)
     x_dev = x - x_mean
     x_dev_sq = x_dev ** 2
-    x_var = np.mean(x_dev_sq, axis=0)
-    x_std = np.sqrt(x_var) + eps
+    x_var = np.mean(x_dev_sq, axis=0) + eps
+    x_std = np.sqrt(x_var)
     x_std_rev = 1 / x_std
     running_mean = momentum * running_mean + (1 - momentum) * x_mean
     running_var =  momentum * running_var + (1 - momentum) * x_std
     norm_x = x_dev * x_std_rev
-    cache = norm_x, x_std, gamma, x_std_rev, x_std, x_dev
+    cache = norm_x, x_std, gamma, x_std_rev, x_dev, x_var, x_mean, x
     out = gamma * norm_x + beta
     #############################################################################
     #                             END OF YOUR CODE                              #
@@ -196,6 +196,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
     # the out variable.                                                         #
     #############################################################################
     out = (x - running_mean) / (running_var + eps)
+    out = gamma * out + beta
     #############################################################################
     #                             END OF YOUR CODE                              #
     #############################################################################
@@ -231,7 +232,7 @@ def batchnorm_backward(dout, cache):
   # TODO: Implement the backward pass for batch normalization. Store the      #
   # results in the dx, dgamma, and dbeta variables.                           #
   #############################################################################
-  norm_x, x_std, gamma, x_std_rev, x_std, x_dev  = cache
+  norm_x, x_std, gamma, x_std_rev, x_dev, x_var, x_mean, x  = cache
   N, D = norm_x.shape
   dgamma = np.sum((dout * norm_x), axis=0)
   dbeta = np.sum(dout, axis=0)
@@ -276,7 +277,11 @@ def batchnorm_backward_alt(dout, cache):
   # should be able to compute gradients with respect to the inputs in a       #
   # single statement; our implementation fits on a single 80-character line.  #
   #############################################################################
-  pass
+  norm_x, x_std, gamma, x_std_rev, x_dev, x_var, x_mean, x  = cache
+  N, D = norm_x.shape
+  dgamma = np.sum((dout * norm_x), axis=0)
+  dbeta = np.sum(dout, axis=0)
+  dx = 1./N * gamma * (x_std_rev) * (N * dout - np.sum(dout, axis=0) - x_dev * (x_var**-1) * np.sum(dout * x_dev, axis=0))
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -581,7 +586,7 @@ def softmax_loss(x, y):
   probs = np.exp(x - np.max(x, axis=1, keepdims=True))
   probs /= np.sum(probs, axis=1, keepdims=True)
   N = x.shape[0]
-  loss = -np.sum(np.log(probs[np.arange(N), y])) / N
+  loss = -np.sum(np.log(probs[np.arange(N), y] + 1e-20)) / N
   dx = probs.copy()
   dx[np.arange(N), y] -= 1
   dx /= N
