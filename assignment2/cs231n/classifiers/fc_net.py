@@ -21,7 +21,7 @@ class TwoLayerNet(object):
   """
   
   def __init__(self, input_dim=3*32*32, hidden_dim=100, num_classes=10,
-               weight_scale=1e-3, reg=0.0):
+               weight_scale=1e-3, reg=0.0, dtype=np.float32):
     """
     Initialize a new network.
 
@@ -105,7 +105,7 @@ class TwoLayerNet(object):
     # of 0.5 to simplify the expression for the gradient.                      #
     ############################################################################
     data_loss, dscores = softmax_loss(scores, y)
-    reg_loss = 0.5 *reg* (np.sum(np.minimum(W1,1000)**2) + np.sum(np.minimum(W2,1000)**2))
+    reg_loss = 0.5 *reg* (np.sum(np.minimum(W1,1000000)**2) + np.sum(np.minimum(W2,1000000)**2))
     loss = data_loss + reg_loss
 
     d_hidden_layer, dW2, dB2 = affine_backward(dscores, affine_cache2)
@@ -187,10 +187,15 @@ class FullyConnectedNet(object):
         idx = i+1
         w = "W" + str(idx)
         b= "b" + str(idx)
+        gamma = "gamma"+ str(idx)
+        beta = "beta" + str(idx)
         src_dim = input_dim if idx == 1 else hidden_dims[idx-2]
         dst_dim = num_classes if idx == self.num_layers else hidden_dims[idx-1]
         self.params[w] = np.random.randn(src_dim,dst_dim) * weight_scale
         self.params[b] = np.zeros(dst_dim)
+        if idx != self.num_layers and self.use_batchnorm:
+            self.params[gamma] = np.ones(dst_dim)
+            self.params[beta] = np.zeros(dst_dim)
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -253,11 +258,19 @@ class FullyConnectedNet(object):
         idx = i+1
         w = "W" + str(idx)
         b= "b" + str(idx)
-        layer, affine_cache = affine_forward(layer, self.params[w], self.params[b])
-        layers[idx] = {"layer":layer, "affine_cache": affine_cache}
-        if idx != self.num_layers:
-            layer, relu_cache = relu_forward(layer)
-            layers[idx]["relu_cache"] = relu_cache
+        gamma = "gamma"+ str(idx)
+        beta = "beta" + str(idx)
+        if self.use_batchnorm:
+            if idx != self.num_layers:
+                layer, cache = affine_batch_norm_relu_forward(layer, self.params[w], self.params[b], self.params[gamma], self.params[beta], self.bn_params[i])
+                layers[idx] = {"layer": layer, "cache": cache}
+        else:
+            if idx != self.num_layers:
+                layer, cache = affine_relu_forward(layer, self.params[w], self.params[b])
+                layers[idx] = {"layer": layer, "cache": cache}
+        if idx == self.num_layers:
+            layer, cache = affine_forward(layer, self.params[w], self.params[b])
+            layers[idx] = {"layer":layer, "cache": cache}
     scores = layer
  ############################################################################
     #                             END OF YOUR CODE                             #
@@ -290,15 +303,22 @@ class FullyConnectedNet(object):
         reg_loss += np.sum(self.params[w]**2) * 0.5 * self.reg
     loss = data_loss + reg_loss
     
-    d_previous = dscores
+    dout = dscores
     for i in reversed(xrange(self.num_layers)):
         idx = i+1
         w = "W" + str(idx)
         b = "b" + str(idx)
+        gamma = "gamma"+ str(idx)
+        beta = "beta" + str(idx)
         layer = layers[idx]
-        if "relu_cache" in layer:
-            d_previous = relu_backward(d_previous, layer["relu_cache"])
-        d_previous, grads[w], grads[b] = affine_backward(d_previous, layer["affine_cache"])
+        if self.use_batchnorm:
+            if idx != self.num_layers:
+                dout, grads[w], grads[b], grads[gamma], grads[beta] = affine_batch_norm_relu_backward(dout, layer["cache"])
+        else:
+            if idx != self.num_layers:
+                dout, grads[w], grads[b] = affine_relu_backward(dout, layer["cache"])
+        if idx == self.num_layers:
+            dout, grads[w], grads[b] = affine_backward(dout, layer["cache"])
         grads[w] += self.reg * self.params[w]
     ############################################################################
     #                             END OF YOUR CODE                             #
