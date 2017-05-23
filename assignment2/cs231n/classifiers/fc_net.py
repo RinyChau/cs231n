@@ -260,17 +260,19 @@ class FullyConnectedNet(object):
         b= "b" + str(idx)
         gamma = "gamma"+ str(idx)
         beta = "beta" + str(idx)
-        if self.use_batchnorm:
-            if idx != self.num_layers:
-                layer, cache = affine_batch_norm_relu_forward(layer, self.params[w], self.params[b], self.params[gamma], self.params[beta], self.bn_params[i])
-                layers[idx] = {"layer": layer, "cache": cache}
-        else:
-            if idx != self.num_layers:
-                layer, cache = affine_relu_forward(layer, self.params[w], self.params[b])
-                layers[idx] = {"layer": layer, "cache": cache}
+        
         if idx == self.num_layers:
             layer, cache = affine_forward(layer, self.params[w], self.params[b])
-            layers[idx] = {"layer":layer, "cache": cache}
+        else:
+            if self.use_batchnorm and self.use_dropout:
+                layer, cache = affine_batch_norm_relu_dropout_forward(layer, self.params[w], self.params[b], self.params[gamma], self.params[beta], self.bn_params[i], self.dropout_param)
+            elif self.use_batchnorm:
+                layer, cache = affine_batch_norm_relu_forward(layer, self.params[w], self.params[b], self.params[gamma], self.params[beta], self.bn_params[i])
+            elif self.use_dropout:
+                layer, cache = affine_relu_dropout_forward(layer, self.params[w], self.params[b], self.dropout_param)
+            else:
+                layer, cache = affine_relu_forward(layer, self.params[w], self.params[b])
+        layers[idx] = {"layer": layer, "cache": cache}
     scores = layer
  ############################################################################
     #                             END OF YOUR CODE                             #
@@ -311,14 +313,18 @@ class FullyConnectedNet(object):
         gamma = "gamma"+ str(idx)
         beta = "beta" + str(idx)
         layer = layers[idx]
-        if self.use_batchnorm:
-            if idx != self.num_layers:
-                dout, grads[w], grads[b], grads[gamma], grads[beta] = affine_batch_norm_relu_backward(dout, layer["cache"])
-        else:
-            if idx != self.num_layers:
-                dout, grads[w], grads[b] = affine_relu_backward(dout, layer["cache"])
         if idx == self.num_layers:
             dout, grads[w], grads[b] = affine_backward(dout, layer["cache"])
+        else:
+            if self.use_batchnorm and self.use_dropout:
+                dout, grads[w], grads[b], grads[gamma], grads[beta] = affine_batch_norm_relu_dropout_backward(dout, layer["cache"])
+            elif self.use_batchnorm:
+                dout, grads[w], grads[b], grads[gamma], grads[beta] = affine_batch_norm_relu_backward(dout, layer["cache"])
+            elif self.use_dropout:
+                dout, grads[w], grads[b] = affine_relu_dropout_backward(dout, layer["cache"])
+            else:
+                dout, grads[w], grads[b] = affine_relu_backward(dout, layer["cache"])
+        
         grads[w] += self.reg * self.params[w]
     ############################################################################
     #                             END OF YOUR CODE                             #
