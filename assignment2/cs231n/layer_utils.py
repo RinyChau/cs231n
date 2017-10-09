@@ -29,6 +29,19 @@ def affine_relu_backward(dout, cache):
   dx, dw, db = affine_backward(da, fc_cache)
   return dx, dw, db
 
+def affine_batch_norm_forward(x, w, b, gamma, beta, bn_param):
+    a, fc_cache = affine_forward(x, w, b)
+    out, ba_cache = batchnorm_forward(a, gamma, beta, bn_param)
+    cache = (fc_cache, ba_cache)
+    return out, cache
+
+def affine_batch_norm_backward(dout, cache):
+    fc_cache, ba_cache = cache
+    da, dgamma, dbeta = batchnorm_backward_alt(dout, ba_cache)
+    dx, dw, db = affine_backward(da, fc_cache)
+    return dx, dw, db, dgamma, dbeta
+
+
 def affine_batch_norm_relu_forward(x, w, b, gamma, beta, bn_param):
     a, fc_cache = affine_forward(x, w, b)
     b, ba_cache = batchnorm_forward(a, gamma, beta, bn_param)
@@ -102,6 +115,33 @@ def conv_relu_backward(dout, cache):
   dx, dw, db = conv_backward_fast(da, conv_cache)
   return dx, dw, db
 
+def residual_forward(x, fw, fb, sw, sb, conv_param):
+    f_out, f_cache = conv_relu_forward(x, fw, fb, conv_param)
+    s_out, s_cache = conv_relu_forward(f_out, sw, sb, conv_param)
+    out = x + s_out
+    cache = f_cache, s_cache
+    return out, cache
+
+def residual_backward(dout, cache):
+    f_cache, s_cache = cache
+    dsx, dsw, dsb= conv_relu_backward(dout, s_cache)
+    dfx, dfw, dfb = conv_relu_backward(dsx, f_cache)
+    dx =dfx + dout
+    return dx, dfw, dfb, dsw, dsb
+
+def residual_spatial_batchnorm_forward(x, fw, fb, sw, sb, conv_param, fgamma, fbeta, sgamma, sbeta, fbn_param, sbn_param):
+    f_out, f_cache = conv_spatial_batchnorm_relu_forward(x, fw, fb, conv_param, fgamma, fbeta, fbn_param)
+    s_out, s_cache = conv_spatial_batchnorm_relu_forward(f_out, sw, sb, conv_param, sgamma, sbeta, sbn_param)
+    out = x + s_out
+    cache = f_cache, s_cache
+    return out, cache
+
+def residual_spatial_batchnorm_backward(dout, cache):
+    f_cache, s_cache = cache
+    dsx, dsw, dsb, dsgamma, dsbeta = conv_spatial_batchnorm_relu_backward(dout, s_cache)
+    dfx, dfw, dfb, dfgamma, dfbeta = conv_spatial_batchnorm_relu_backward(dsx, f_cache)
+    dx =dfx + dout
+    return dx, dfw, dfb, dsw, dsb, dfgamma, dfbeta, dsgamma, dsbeta
 
 def conv_relu_pool_forward(x, w, b, conv_param, pool_param):
   """
@@ -116,10 +156,9 @@ def conv_relu_pool_forward(x, w, b, conv_param, pool_param):
   - out: Output from the pooling layer
   - cache: Object to give to the backward pass
   """
-  a, conv_cache = conv_forward_fast(x, w, b, conv_param)
-  s, relu_cache = relu_forward(a)
+  s, conv_relu_cache = conv_relu_forward(x, w, b, conv_param)
   out, pool_cache = max_pool_forward_fast(s, pool_param)
-  cache = (conv_cache, relu_cache, pool_cache)
+  cache = (conv_relu_cache[0], conv_relu_cache[1], pool_cache)
   return out, cache
 
 
@@ -132,3 +171,44 @@ def conv_relu_pool_backward(dout, cache):
   da = relu_backward(ds, relu_cache)
   dx, dw, db = conv_backward_fast(da, conv_cache)
   return dx, dw, db
+
+def conv_spatial_batchnorm_forward(x, w, b, conv_param, gamma, beta, bn_param):
+    out, conv_cache = conv_forward_fast(x, w, b, conv_param)
+    out, spa_ba_cache = spatial_batchnorm_forward(out, gamma, beta, bn_param)
+    return out, (conv_cache, spa_ba_cache)
+
+def conv_spatial_batchnorm_backward(dout, cache):
+    conv_cache, spa_ba_cache = cache
+    dx, dgamma, dbeta = spatial_batchnorm_backward(dout, spa_ba_cache)
+    dx, dw, db = conv_backward_fast(dx, conv_cache)
+    return dx, dw, db, dgamma, dbeta
+
+def conv_spatial_batchnorm_relu_forward(x, w, b, conv_param, gamma, beta, bn_param):
+    out, cache = conv_spatial_batchnorm_forward(x, w, b, conv_param, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(out)
+    cache += (relu_cache, )
+    return out, cache
+
+def conv_spatial_batchnorm_relu_backward(dout, cache):
+    conv_cache, spa_bat_cache, relu_cache = cache
+    dout = relu_backward(dout, relu_cache)
+    dx, dw, db, dgamma, dbeta = conv_spatial_batchnorm_backward(dout, (conv_cache, spa_bat_cache))
+    return dx, dw, db, dgamma, dbeta
+
+def conv_spatial_batchnorm_relu_pool_forward(x, w, b, conv_param, gamma, beta, bn_param, pool_param):
+    out, cache = conv_spatial_batchnorm_relu_forward(x, w, b, conv_param, gamma, beta, bn_param)
+    out, pool_cache = max_pool_forward_fast(out, pool_param)
+    cache = (cache, pool_cache)
+    return out, cache
+
+def conv_spatial_batchnorm_relu_pool_backward(dout, cache):
+    cache, pool_cache = cache
+    dout = max_pool_backward_fast(dout, pool_cache)
+    dx, dw, db, dgamma, dbeta = conv_spatial_batchnorm_relu_backward(dout, cache)
+    return dx, dw, db, dgamma, dbeta
+
+
+
+
+   
+    

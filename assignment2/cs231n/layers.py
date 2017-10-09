@@ -1,5 +1,5 @@
 import numpy as np
-
+from cs231n.fast_layers import *
 
 def affine_forward(x, w, b):
   """
@@ -363,6 +363,12 @@ def dropout_backward(dout, cache):
   elif mode == 'test':
     dx = dout
   return dx
+
+def conv_forward(*argv, **kwargs):
+    return conv_forward_fast(*argv, **kwargs)
+
+def conv_backward(*argv, **kwargs):
+    return conv_backward_fast(*argv, **kwargs)
 
 
 def conv_forward_naive(x, w, b, conv_param):
